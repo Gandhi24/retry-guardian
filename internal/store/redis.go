@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"retry-guardian/internal/rules"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const (
