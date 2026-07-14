@@ -1,0 +1,133 @@
+rules_version: "2026-07-14.1"
+
+defaults:
+  window: "384h"   # 16 days
+  max_attempts: 4
+
+# MAC rules apply to Mastercard only and take precedence over network_code_rules.
+mac_rules:
+  "02": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_72H",              cooldown: "72h"  }
+  "03": { class: "HARD_DECLINE",                         reason: "MAC_DO_NOT_RETRY"                                   }
+  "04": { class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE", reason: "MAC_TECHNICAL_TOKEN_ISSUE",         cooldown: "1h"   }
+  "08": { class: "HARD_DECLINE",                         reason: "MAC_BLOCKED_BY_PROCESSOR"                           }
+  "21": { class: "HARD_DECLINE",                         reason: "MAC_PENALTY_RISK"                                   }
+  "22": { class: "HARD_DECLINE",                         reason: "MAC_INSTALLMENTS_NOT_ALLOWED"                       }
+  "24": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_1H",               cooldown: "1h"   }
+  "25": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_24H",              cooldown: "24h"  }
+  "26": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_2D",               cooldown: "48h"  }
+  "27": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_4D",               cooldown: "96h"  }
+  "28": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_6D",               cooldown: "144h" }
+  "29": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_8D",               cooldown: "192h" }
+  "30": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_10D",              cooldown: "240h" }
+  "40": { class: "PASS_THROUGH",                         reason: "MAC_NO_ACTION_REQUIRED"                             }
+  "41": { class: "PASS_THROUGH",                         reason: "MAC_NO_ACTION_REQUIRED"                             }
+  "42": { class: "PASS_THROUGH",                         reason: "MAC_NO_ACTION_REQUIRED"                             }
+  "99": { class: "HARD_DECLINE",                         reason: "MAC_NO_ACTION_POSSIBLE"                             }
+
+# network_code_rules are keyed by (network, code).
+# Use "ANY" in the networks list to match all card networks.
+# Lookup order: specific network first, then ANY as fallback.
+network_code_rules:
+  # --- HARD_DECLINE ---
+  - networks: ["ANY"]
+    code: "04"
+    class: "HARD_DECLINE"
+    reason: "CAPTURE_CARD"
+
+  - networks: ["ANY"]
+    code: "07"
+    class: "HARD_DECLINE"
+    reason: "PICKUP_CARD_SPECIAL"
+
+  - networks: ["ANY"]
+    code: "12"
+    class: "HARD_DECLINE"
+    reason: "INVALID_TRANSACTION"
+
+  - networks: ["ANY"]
+    code: "14"
+    class: "HARD_DECLINE"
+    reason: "INVALID_CARD_NUMBER"
+
+  - networks: ["ANY"]
+    code: "41"
+    class: "HARD_DECLINE"
+    reason: "STOLEN_CARD"
+
+  - networks: ["ANY"]
+    code: "43"
+    class: "HARD_DECLINE"
+    reason: "STOLEN_CARD"
+
+  - networks: ["ANY"]
+    code: "46"
+    class: "HARD_DECLINE"
+    reason: "CLOSED_ACCOUNT"
+
+  # --- SCHEME_PENALTY_DECLINE_RETRIABLE ---
+  - networks: ["ANY"]
+    code: "51"
+    class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
+    reason: "INSUFFICIENT_FUNDS"
+    cooldown: "24h"
+
+  - networks: ["ANY"]
+    code: "61"
+    class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
+    reason: "EXCEEDS_WITHDRAWAL_LIMIT"
+    cooldown: "24h"
+
+  - networks: ["ANY"]
+    code: "65"
+    class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
+    reason: "EXCEEDS_FREQUENCY_LIMIT"
+    cooldown: "24h"
+
+  - networks: ["MASTERCARD"]
+    code: "N4"
+    class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
+    reason: "INSUFFICIENT_FUNDS_OR_OVER_LIMIT"
+    cooldown: "24h"
+
+  # --- SCHEME_NON_PENALTY_DECLINE_RETRIABLE ---
+  - networks: ["ANY"]
+    code: "19"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "RE_ENTER_TRANSACTION"
+    cooldown: "1h"
+
+  - networks: ["ANY"]
+    code: "42"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "NO_UNIVERSAL_ACCOUNT"
+    cooldown: "1h"
+
+  - networks: ["ANY"]
+    code: "80"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "INVALID_DATE"
+    cooldown: "1h"
+
+  - networks: ["ANY"]
+    code: "91"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "ISSUER_UNAVAILABLE"
+    cooldown: "1h"
+
+  - networks: ["ANY"]
+    code: "96"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "SYSTEM_ERROR"
+    cooldown: "1h"
+
+  - networks: ["ANY"]
+    code: "1Z"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "ISSUER_UNAVAILABLE"
+    cooldown: "1h"
+
+  - networks: ["MASTERCARD"]
+    code: "N0"
+    class: "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
+    reason: "UNABLE_TO_AUTHORIZE"
+    cooldown: "1h"
