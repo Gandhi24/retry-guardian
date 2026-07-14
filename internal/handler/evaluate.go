@@ -4,10 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"retry-guardian/internal/engine"
 	"retry-guardian/internal/rules"
 	"retry-guardian/internal/store"
+
+	"github.com/gin-gonic/gin"
 )
 
 type EvaluateHandler struct {
