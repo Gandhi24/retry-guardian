@@ -16,6 +16,16 @@ const (
 	DecisionBlock = "BLOCK"
 )
 
+const (
+	DegradedStateUnavailable = "DEGRADED_STATE_UNAVAILABLE"
+	NoPriorDecline           = "NO_PRIOR_DECLINE"
+	WithinRetryBudget        = "WITHIN_RETRY_BUDGET"
+	RetryBlocked             = "RETRY_BLOCKED"
+	RetryTooSoon             = "RETRY_TOO_SOON"
+	RetryLimitExceeded       = "RETRY_LIMIT_EXCEEDED"
+	WindowReset              = "WINDOW_RESET"
+)
+
 type EvaluateRequest struct {
 	PaymentID          string `json:"payment_id"          binding:"required"`
 	MerchantID         string `json:"merchant_id"         binding:"required"`
@@ -52,13 +62,13 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 	if err != nil {
 		slog.ErrorContext(ctx, "redis unavailable, failing open",
 			"payment_id", req.PaymentID, "error", err)
-		return allowResp("DEGRADED_STATE_UNAVAILABLE",
+		return allowResp(DegradedStateUnavailable,
 			"Retry state temporarily unavailable; proceeding with caution.", nil)
 	}
 
 	// No history at all → first-ever attempt for this identity.
 	if state == nil {
-		return allowResp("NO_PRIOR_DECLINE",
+		return allowResp(NoPriorDecline,
 			"No blocking decline history for this transaction.", nil)
 	}
 
@@ -66,7 +76,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 	if state.RetryClass == rules.HardDecline {
 		cls := string(state.RetryClass)
 		return blockResp(
-			"RETRY_BLOCKED",
+			RetryBlocked,
 			fmt.Sprintf("Payment permanently blocked. Do not retry — scheme fines may apply."),
 			&cls, nil,
 		)
@@ -79,7 +89,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 		cls := string(state.RetryClass)
 		t := state.RetryNotBefore
 		return blockResp(
-			"RETRY_TOO_SOON",
+			RetryTooSoon,
 			fmt.Sprintf("Scheme mandates a cooldown period. Retry allowed after %s.", t.Format(time.RFC3339)),
 			&cls, &t,
 		)
@@ -93,7 +103,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 		// Window has rolled over → budget resets, allow freely.
 		if now.After(windowEnd) {
 			days := int(window.Hours() / 24)
-			return allowResp("WINDOW_RESET",
+			return allowResp(WindowReset,
 				fmt.Sprintf("The %d-day retry window has reset. This transaction may be retried.", days), nil)
 		}
 
@@ -101,7 +111,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 		if state.AttemptCount >= int64(state.MaxAttempts) {
 			cls := string(state.RetryClass)
 			return blockResp(
-				"RETRY_LIMIT_EXCEEDED",
+				RetryLimitExceeded,
 				fmt.Sprintf("%d of %d permitted retries used. Window resets at %s.",
 					state.AttemptCount, state.MaxAttempts, windowEnd.Format(time.RFC3339)),
 				&cls, &windowEnd,
@@ -110,7 +120,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 
 		remaining := int(int64(state.MaxAttempts) - state.AttemptCount)
 		return allowResp(
-			"WITHIN_RETRY_BUDGET",
+			WithinRetryBudget,
 			fmt.Sprintf("%d of %d permitted attempts used. Retry is allowed.",
 				state.AttemptCount, state.MaxAttempts),
 			&remaining,
@@ -118,7 +128,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 	}
 
 	// No count limit for this code (e.g. SCHEME_NON_PENALTY) — cooldown was the only constraint.
-	return allowResp("WITHIN_RETRY_BUDGET", "Retry is allowed.", nil)
+	return allowResp(WithinRetryBudget, "Retry is allowed.", nil)
 }
 
 // ---- response builders ---------------------------------------------------
