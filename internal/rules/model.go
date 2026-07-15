@@ -11,11 +11,6 @@ const (
 	PassThrough                      RetryClass = "PASS_THROUGH"
 )
 
-type Defaults struct {
-	Window      time.Duration
-	MaxAttempts int
-}
-
 type MACRule struct {
 	Class    RetryClass
 	Reason   string
@@ -23,15 +18,16 @@ type MACRule struct {
 }
 
 type NetworkCodeRule struct {
-	Class    RetryClass
-	Reason   string
-	Cooldown time.Duration
+	Class       RetryClass
+	Reason      string
+	Cooldown    time.Duration
+	MaxAttempts int           // 0 means no scheme count limit for this code
+	Window      time.Duration // 0 when MaxAttempts is 0
 }
 
 // Table is the fully resolved, ready-to-query rules state loaded at boot.
 type Table struct {
 	Version          string
-	Defaults         Defaults
 	MACRules         map[string]MACRule         // keyed by MAC code string, e.g. "03"
 	NetworkCodeIndex map[string]NetworkCodeRule // keyed by "NETWORK:CODE" or "ANY:CODE"
 }

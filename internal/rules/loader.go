@@ -17,21 +17,17 @@ type yamlMACRule struct {
 }
 
 type yamlNetworkCodeEntry struct {
-	Networks []string `yaml:"networks"`
-	Code     string   `yaml:"code"`
-	Class    string   `yaml:"class"`
-	Reason   string   `yaml:"reason"`
-	Cooldown string   `yaml:"cooldown"`
-}
-
-type yamlDefaults struct {
-	Window      string `yaml:"window"`
-	MaxAttempts int    `yaml:"max_attempts"`
+	Networks    []string `yaml:"networks"`
+	Code        string   `yaml:"code"`
+	Class       string   `yaml:"class"`
+	Reason      string   `yaml:"reason"`
+	Cooldown    string   `yaml:"cooldown"`
+	MaxAttempts int      `yaml:"max_attempts"` // 0 = no count limit for this code
+	Window      string   `yaml:"window"`       // empty = use defaults.window
 }
 
 type yamlFile struct {
 	Version          string                 `yaml:"rules_version"`
-	Defaults         yamlDefaults           `yaml:"defaults"`
 	MACRules         map[string]yamlMACRule `yaml:"mac_rules"`
 	NetworkCodeRules []yamlNetworkCodeEntry `yaml:"network_code_rules"`
 }
@@ -50,14 +46,6 @@ func Load(path string) (*Table, error) {
 		return nil, fmt.Errorf("parse rules yaml: %w", err)
 	}
 
-	window, err := time.ParseDuration(raw.Defaults.Window)
-	if err != nil {
-		return nil, fmt.Errorf("defaults.window: %w", err)
-	}
-	if raw.Defaults.MaxAttempts <= 0 {
-		return nil, fmt.Errorf("defaults.max_attempts must be > 0")
-	}
-
 	macRules, err := buildMACRules(raw.MACRules)
 	if err != nil {
 		return nil, err
@@ -69,11 +57,7 @@ func Load(path string) (*Table, error) {
 	}
 
 	return &Table{
-		Version: raw.Version,
-		Defaults: Defaults{
-			Window:      window,
-			MaxAttempts: raw.Defaults.MaxAttempts,
-		},
+		Version:          raw.Version,
 		MACRules:         macRules,
 		NetworkCodeIndex: networkCodeIndex,
 	}, nil
@@ -104,10 +88,24 @@ func buildNetworkCodeIndex(entries []yamlNetworkCodeEntry) (map[string]NetworkCo
 		if err != nil {
 			return nil, fmt.Errorf("network_code_rules[networks=%v code=%s].cooldown: %w", e.Networks, e.Code, err)
 		}
+		var window time.Duration
+		if e.MaxAttempts > 0 {
+			// Window only applies when there is a count limit.
+			if e.Window != "" {
+				window, err = time.ParseDuration(e.Window)
+				if err != nil {
+					return nil, fmt.Errorf("network_code_rules[networks=%v code=%s].window: %w", e.Networks, e.Code, err)
+				}
+			} else {
+				window = 384 * time.Hour
+			}
+		}
 		rule := NetworkCodeRule{
-			Class:    RetryClass(e.Class),
-			Reason:   e.Reason,
-			Cooldown: cooldown,
+			Class:       RetryClass(e.Class),
+			Reason:      e.Reason,
+			Cooldown:    cooldown,
+			MaxAttempts: e.MaxAttempts,
+			Window:      window,
 		}
 		for _, network := range e.Networks {
 			index[network+":"+e.Code] = rule

@@ -1,9 +1,5 @@
 rules_version: "2026-07-14.1"
 
-defaults:
-  window: "384h"   # 16 days
-  max_attempts: 4
-
 # MAC rules apply to Mastercard only and take precedence over network_code_rules.
 mac_rules:
   "02": { class: "SCHEME_PENALTY_DECLINE_RETRIABLE",     reason: "MAC_RETRY_AFTER_72H",              cooldown: "72h"  }
@@ -77,11 +73,15 @@ network_code_rules:
     reason: "EXCEEDS_WITHDRAWAL_LIMIT"
     cooldown: "24h"
 
+  # Code 65 carries an explicit scheme count limit: max 4 attempts in a 16-day window.
+  # Exceeding this will incur scheme fines. cooldown is the mandatory gap between attempts.
   - networks: ["ANY"]
     code: "65"
     class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
     reason: "EXCEEDS_FREQUENCY_LIMIT"
     cooldown: "24h"
+    max_attempts: 4
+    window: "384h"
 
   - networks: ["MASTERCARD"]
     code: "N4"

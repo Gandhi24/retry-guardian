@@ -35,8 +35,8 @@ func ttlForClass(class rules.RetryClass) time.Duration {
 // updateStateScript runs atomically inside Redis to record a single decline:
 //   - HSETNX ensures first_attempt_at is only written on the very first decline.
 //   - HINCRBY safely increments the counter regardless of concurrent callers.
-//   - HSET overwrites the classification fields with the latest decline's data.
-//   - EXPIRE resets the TTL on every write so the window slides correctly.
+//   - HSET overwrites classification + count-limit fields with the latest decline's data.
+//   - EXPIRE resets the TTL on every write.
 const updateStateScript = `
 local key = KEYS[1]
 redis.call('HSETNX', key, 'first_attempt_at', ARGV[1])
@@ -44,7 +44,9 @@ redis.call('HINCRBY', key, 'attempt_count', 1)
 redis.call('HSET', key,
     'retry_class',      ARGV[2],
     'block_reason',     ARGV[3],
-    'retry_not_before', ARGV[4])
+    'retry_not_before', ARGV[4],
+    'max_attempts',     ARGV[6],
+    'window_secs',      ARGV[7])
 redis.call('EXPIRE', key, ARGV[5])
 return 1
 `
@@ -56,6 +58,8 @@ type State struct {
 	RetryNotBefore time.Time // zero value means no active cooldown
 	BlockReason    string
 	RetryClass     rules.RetryClass
+	MaxAttempts    int   // 0 means no count limit for this code
+	WindowSecs     int64 // seconds; 0 when MaxAttempts is 0
 }
 
 // Store exposes the retry-guardian state operations backed by Redis.
@@ -100,12 +104,15 @@ func (s *Store) UpdateState(
 	reason string,
 	cooldown time.Duration,
 	now time.Time,
+	maxAttempts int,
+	window time.Duration,
 ) error {
 	retryNotBefore := int64(0)
 	if cooldown > 0 {
 		retryNotBefore = now.Add(cooldown).Unix()
 	}
 	ttl := int64(ttlForClass(class).Seconds())
+	windowSecs := int64(window.Seconds())
 
 	err := s.updateScript.Run(ctx, s.client,
 		[]string{stateKey(identity)},
@@ -114,6 +121,8 @@ func (s *Store) UpdateState(
 		reason,
 		retryNotBefore,
 		ttl,
+		maxAttempts,
+		windowSecs,
 	).Err()
 	if err != nil {
 		return fmt.Errorf("redis updateState script: %w", err)
@@ -177,12 +186,17 @@ func parseState(vals map[string]string) (*State, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse retry_not_before: %w", err)
 	}
+	maxAttempts, _ := strconv.Atoi(vals["max_attempts"]) // 0 on missing/malformed = no limit
+	windowSecs, _ := strconv.ParseInt(vals["window_secs"], 10, 64)
+
 	return &State{
 		AttemptCount:   count,
 		FirstAttemptAt: firstAt,
 		RetryNotBefore: notBefore,
 		BlockReason:    vals["block_reason"],
 		RetryClass:     rules.RetryClass(vals["retry_class"]),
+		MaxAttempts:    maxAttempts,
+		WindowSecs:     windowSecs,
 	}, nil
 }
 

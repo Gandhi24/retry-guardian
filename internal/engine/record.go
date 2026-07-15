@@ -60,19 +60,14 @@ func recordDecline(
 	st *store.Store,
 	table *rules.Table,
 ) error {
-	if req.AuthorizationData == nil || req.AuthorizationData.CardNetworkResponseCode == "" {
+	if req.AuthorizationData == nil {
 		return ErrMissingAuthData
-	}
-
-	mac := ""
-	if req.AuthorizationData != nil {
-		mac = req.AuthorizationData.MerchantAdviceCode
 	}
 
 	result := classifier.Classify(
 		network,
 		req.AuthorizationData.CardNetworkResponseCode,
-		mac,
+		req.AuthorizationData.MerchantAdviceCode,
 		table,
 	)
 
@@ -81,5 +76,5 @@ func recordDecline(
 		return nil
 	}
 
-	return st.UpdateState(ctx, txIdentity, result.Class, result.Reason, result.Cooldown, req.OccurredAt)
+	return st.UpdateState(ctx, txIdentity, result.Class, result.Reason, result.Cooldown, req.OccurredAt, result.MaxAttempts, result.Window)
 }

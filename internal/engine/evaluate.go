@@ -58,9 +58,8 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store, table *
 
 	// No history at all → first-ever attempt for this identity.
 	if state == nil {
-		remaining := table.Defaults.MaxAttempts - 1
 		return allowResp("NO_PRIOR_DECLINE",
-			"No blocking decline history for this transaction.", &remaining)
+			"No blocking decline history for this transaction.", nil)
 	}
 
 	// A hard decline blocks permanently — no cooldown or count logic applies.
@@ -86,34 +85,40 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store, table *
 		)
 	}
 
-	windowEnd := state.FirstAttemptAt.Add(table.Defaults.Window)
+	// Count budget — only applies when the declined code carries a scheme limit.
+	if state.MaxAttempts > 0 {
+		window := time.Duration(state.WindowSecs) * time.Second
+		windowEnd := state.FirstAttemptAt.Add(window)
 
-	// Window has rolled over → count budget resets, allow freely.
-	if now.After(windowEnd) {
-		days := int(table.Defaults.Window.Hours() / 24)
-		return allowResp("WINDOW_RESET",
-			fmt.Sprintf("The %d-day retry window has reset. This transaction may be retried.", days), nil)
-	}
+		// Window has rolled over → budget resets, allow freely.
+		if now.After(windowEnd) {
+			days := int(window.Hours() / 24)
+			return allowResp("WINDOW_RESET",
+				fmt.Sprintf("The %d-day retry window has reset. This transaction may be retried.", days), nil)
+		}
 
-	// Count budget exhausted within the current window.
-	if state.AttemptCount >= int64(table.Defaults.MaxAttempts) {
-		cls := string(state.RetryClass)
-		return blockResp(
-			"RETRY_LIMIT_EXCEEDED",
-			fmt.Sprintf("%d of %d permitted retries used. Window resets at %s.",
-				state.AttemptCount, table.Defaults.MaxAttempts, windowEnd.Format(time.RFC3339)),
-			&cls, &windowEnd,
+		// Count budget exhausted within the current window.
+		if state.AttemptCount >= int64(state.MaxAttempts) {
+			cls := string(state.RetryClass)
+			return blockResp(
+				"RETRY_LIMIT_EXCEEDED",
+				fmt.Sprintf("%d of %d permitted retries used. Window resets at %s.",
+					state.AttemptCount, state.MaxAttempts, windowEnd.Format(time.RFC3339)),
+				&cls, &windowEnd,
+			)
+		}
+
+		remaining := int(int64(state.MaxAttempts) - state.AttemptCount)
+		return allowResp(
+			"WITHIN_RETRY_BUDGET",
+			fmt.Sprintf("%d of %d permitted attempts used. Retry is allowed.",
+				state.AttemptCount, state.MaxAttempts),
+			&remaining,
 		)
 	}
 
-	// All checks passed — within budget.
-	remaining := int(int64(table.Defaults.MaxAttempts) - state.AttemptCount)
-	return allowResp(
-		"WITHIN_RETRY_BUDGET",
-		fmt.Sprintf("%d of %d permitted attempts used. Retry is allowed.",
-			state.AttemptCount, table.Defaults.MaxAttempts),
-		&remaining,
-	)
+	// No count limit for this code (e.g. SCHEME_NON_PENALTY) — cooldown was the only constraint.
+	return allowResp("WITHIN_RETRY_BUDGET", "Retry is allowed.", nil)
 }
 
 // ---- response builders ---------------------------------------------------

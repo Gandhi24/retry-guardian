@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"retry-guardian/internal/rules"
+
+	"github.com/gin-gonic/gin"
 )
 
 type RulesHandler struct {
@@ -27,20 +28,16 @@ func (h *RulesHandler) Handle(c *gin.Context) {
 
 type rulesResponse struct {
 	Version          string               `json:"rules_version"`
-	Defaults         defaultsResponse     `json:"defaults"`
 	MACRules         map[string]ruleEntry `json:"mac_rules"`
 	NetworkCodeIndex map[string]ruleEntry `json:"network_code_index"`
 }
 
-type defaultsResponse struct {
-	Window      string `json:"window"`
-	MaxAttempts int    `json:"max_attempts"`
-}
-
 type ruleEntry struct {
-	Class    string `json:"class"`
-	Reason   string `json:"reason"`
-	Cooldown string `json:"cooldown,omitempty"`
+	Class       string `json:"class"`
+	Reason      string `json:"reason"`
+	Cooldown    string `json:"cooldown,omitempty"`
+	MaxAttempts int    `json:"max_attempts,omitempty"`
+	Window      string `json:"window,omitempty"`
 }
 
 func toRulesResponse(t *rules.Table) rulesResponse {
@@ -56,18 +53,16 @@ func toRulesResponse(t *rules.Table) rulesResponse {
 	networkCodes := make(map[string]ruleEntry, len(t.NetworkCodeIndex))
 	for key, r := range t.NetworkCodeIndex {
 		networkCodes[key] = ruleEntry{
-			Class:    string(r.Class),
-			Reason:   r.Reason,
-			Cooldown: formatDuration(r.Cooldown),
+			Class:       string(r.Class),
+			Reason:      r.Reason,
+			Cooldown:    formatDuration(r.Cooldown),
+			MaxAttempts: r.MaxAttempts,
+			Window:      formatDuration(r.Window),
 		}
 	}
 
 	return rulesResponse{
-		Version: t.Version,
-		Defaults: defaultsResponse{
-			Window:      t.Defaults.Window.String(),
-			MaxAttempts: t.Defaults.MaxAttempts,
-		},
+		Version:          t.Version,
 		MACRules:         macRules,
 		NetworkCodeIndex: networkCodes,
 	}
