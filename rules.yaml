@@ -79,7 +79,6 @@ network_code_rules:
     code: "65"
     class: "SCHEME_PENALTY_DECLINE_RETRIABLE"
     reason: "EXCEEDS_FREQUENCY_LIMIT"
-    cooldown: "24h"
     max_attempts: 4
     window: "384h"
 
