@@ -67,7 +67,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 		cls := string(state.RetryClass)
 		return blockResp(
 			"RETRY_BLOCKED",
-			fmt.Sprintf("Payment permanently blocked (%s). Do not retry — scheme fines may apply.", state.BlockReason),
+			fmt.Sprintf("Payment permanently blocked. Do not retry — scheme fines may apply."),
 			&cls, nil,
 		)
 	}
