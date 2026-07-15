@@ -15,6 +15,10 @@ import (
 // card_network_response_code that the classifier needs.
 var ErrMissingAuthData = errors.New("authorization_data.card_network_response_code is required for DECLINED outcome")
 
+// ErrPaymentAlreadyRecorded is returned when /record is called a second time for
+// the same payment_id but with a different outcome than the first call.
+var ErrPaymentAlreadyRecorded = errors.New("payment already recorded with a conflicting outcome")
+
 type RecordRequest struct {
 	PaymentID         string             `json:"payment_id"         binding:"required"`
 	Outcome           string             `json:"outcome"            binding:"required"` // APPROVED | DECLINED | ERROR
@@ -33,24 +37,36 @@ type AuthorizationData struct {
 //   - DECLINED → classifies the scheme codes and writes the new state to Redis.
 //   - ERROR    → no state change; errors are not retries and carry no scheme codes.
 func Record(ctx context.Context, req RecordRequest, st *store.Store, table *rules.Table) error {
-	txIdentity, network, err := st.GetPaymentContext(ctx, req.PaymentID)
+	txIdentity, network, recordedOutcome, err := st.GetPaymentContext(ctx, req.PaymentID)
 	if err != nil {
 		return err // store.ErrPaymentNotFound propagates to the handler
 	}
 
+	// Idempotency: exact same call already processed — safe to ack again.
+	if recordedOutcome == req.Outcome {
+		return nil
+	}
+	// Conflict: a different outcome was already recorded for this payment_id.
+	if recordedOutcome != "" {
+		return ErrPaymentAlreadyRecorded
+	}
+
 	switch req.Outcome {
 	case "APPROVED":
-		return st.ClearState(ctx, txIdentity)
-
+		if err := st.ClearState(ctx, txIdentity); err != nil {
+			return err
+		}
 	case "ERROR":
-		return nil
-
+		// no state change
 	case "DECLINED":
-		return recordDecline(ctx, txIdentity, network, req, st, table)
-
+		if err := recordDecline(ctx, txIdentity, network, req, st, table); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown outcome %q: must be APPROVED, DECLINED, or ERROR", req.Outcome)
 	}
+
+	return st.MarkPaymentRecorded(ctx, req.PaymentID, txIdentity, network, req.Outcome)
 }
 
 func recordDecline(

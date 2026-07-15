@@ -152,20 +152,34 @@ func (s *Store) SavePaymentMapping(ctx context.Context, paymentID, identity, net
 // ErrPaymentNotFound is returned when the payment mapping has expired or never existed.
 var ErrPaymentNotFound = errors.New("payment not found: /evaluate must be called before /record")
 
-// GetPaymentContext retrieves the (identity, network) pair stored at evaluate time.
-func (s *Store) GetPaymentContext(ctx context.Context, paymentID string) (identity, network string, err error) {
+// GetPaymentContext retrieves the identity, network, and already-recorded outcome
+// (empty string if /record has not yet been called) stored at evaluate time.
+func (s *Store) GetPaymentContext(ctx context.Context, paymentID string) (identity, network, recordedOutcome string, err error) {
 	val, err := s.client.Get(ctx, paymentKey(paymentID)).Result()
 	if errors.Is(err, redis.Nil) {
-		return "", "", ErrPaymentNotFound
+		return "", "", "", ErrPaymentNotFound
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("redis GET payment mapping: %w", err)
+		return "", "", "", fmt.Errorf("redis GET payment mapping: %w", err)
 	}
-	parts := strings.SplitN(val, "|", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("malformed payment mapping value: %q", val)
+	parts := strings.SplitN(val, "|", 3)
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("malformed payment mapping value: %q", val)
 	}
-	return parts[0], parts[1], nil
+	if len(parts) == 3 {
+		recordedOutcome = parts[2]
+	}
+	return parts[0], parts[1], recordedOutcome, nil
+}
+
+// MarkPaymentRecorded appends the outcome to the payment mapping key, preserving
+// the original TTL, so duplicate /record calls can be detected and short-circuited.
+func (s *Store) MarkPaymentRecorded(ctx context.Context, paymentID, identity, network, outcome string) error {
+	val := identity + "|" + network + "|" + outcome
+	if err := s.client.Set(ctx, paymentKey(paymentID), val, redis.KeepTTL).Err(); err != nil {
+		return fmt.Errorf("redis SET payment mapping (mark recorded): %w", err)
+	}
+	return nil
 }
 
 // ---- helpers -------------------------------------------------------------

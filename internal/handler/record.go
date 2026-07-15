@@ -34,6 +34,8 @@ func (h *RecordHandler) Handle(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		case errors.Is(err, engine.ErrMissingAuthData):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, engine.ErrPaymentAlreadyRecorded):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
 			slog.ErrorContext(c.Request.Context(), "record failed",
 				"payment_id", req.PaymentID,

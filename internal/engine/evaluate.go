@@ -66,7 +66,7 @@ func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) Evaluat
 	if state.RetryClass == rules.HardDecline {
 		cls := string(state.RetryClass)
 		return blockResp(
-			state.BlockReason,
+			"RETRY_BLOCKED",
 			fmt.Sprintf("Payment permanently blocked (%s). Do not retry — scheme fines may apply.", state.BlockReason),
 			&cls, nil,
 		)
