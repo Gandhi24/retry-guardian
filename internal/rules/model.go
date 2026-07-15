@@ -5,10 +5,9 @@ import "time"
 type RetryClass string
 
 const (
-	HardDecline                      RetryClass = "HARD_DECLINE"
-	SchemePenaltyDeclineRetriable    RetryClass = "SCHEME_PENALTY_DECLINE_RETRIABLE"
-	SchemeNonPenaltyDeclineRetriable RetryClass = "SCHEME_NON_PENALTY_DECLINE_RETRIABLE"
-	PassThrough                      RetryClass = "PASS_THROUGH"
+	HardDecline                   RetryClass = "HARD_DECLINE"
+	SchemePenaltyDeclineRetriable RetryClass = "SCHEME_PENALTY_DECLINE_RETRIABLE"
+	PassThrough                   RetryClass = "PASS_THROUGH"
 )
 
 type MACRule struct {

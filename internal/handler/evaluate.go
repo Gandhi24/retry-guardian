@@ -27,7 +27,7 @@ func (h *EvaluateHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	resp := engine.Evaluate(c.Request.Context(), req, h.store, h.table)
+	resp := engine.Evaluate(c.Request.Context(), req, h.store)
 
 	slog.InfoContext(c.Request.Context(), "evaluate",
 		"payment_id", req.PaymentID,

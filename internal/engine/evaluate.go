@@ -38,7 +38,7 @@ type EvaluateResponse struct {
 
 // Evaluate returns an ALLOW or BLOCK decision for a payment attempt.
 // It always returns a response — Redis failures fail-open (ALLOW with DEGRADED reason).
-func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store, table *rules.Table) EvaluateResponse {
+func Evaluate(ctx context.Context, req EvaluateRequest, st *store.Store) EvaluateResponse {
 	id := identity.Compute(req.MerchantID, req.CardFingerprint, req.TransactionType)
 
 	// Store payment mapping so /record can resolve identity by payment_id.
